@@ -1,43 +1,22 @@
-# -------- Config --------
-MAIN      ?= main
-PDF       := $(MAIN).pdf
-LATEXMK   ?= latexmk
-LMK_OPTS  ?= -pdf -interaction=nonstopmode -file-line-error
+# Build session reports. Usage: make s2 | make s1 | make all | make clean
+LATEXMK  ?= latexmk
+LMK_OPTS ?= -pdf -interaction=nonstopmode -file-line-error -halt-on-error
 
-# Extra patterns latexmk -c might miss (add/remove as needed)
-EXTRA_CLEAN = \
-  *.aux *.bbl *.bcf *.blg *.fdb_latexmk *.fls *.lof *.log *.lot *.nav \
-  *.out *.run.xml *.synctex.gz *.toc *.snm *.vrb *.idx *.ilg *.ind *.xdv
+.PHONY: all s1 s2 clean open
 
-# -------- Targets --------
-.PHONY: all build pdf tidy clean distclean watch open
+all: s1 s2
 
-all: build
+s1:
+	cd sessions/s1-2025-07 && $(LATEXMK) $(LMK_OPTS) main.tex && $(LATEXMK) -c main.tex
 
-# One-shot: compile then remove intermediates
-build: pdf tidy
+s2:
+	python3 scripts/build.py s2
+	cd sessions/s2-2026-11 && $(LATEXMK) $(LMK_OPTS) main.tex && $(LATEXMK) -c main.tex
 
-# Compile to PDF (latexmk will resolve deps/bib automatically)
-pdf:
-	$(LATEXMK) $(LMK_OPTS) $(MAIN).tex
+clean:
+	cd sessions/s1-2025-07 && $(LATEXMK) -c main.tex
+	cd sessions/s2-2026-11 && $(LATEXMK) -c main.tex
+	rm -rf sessions/*/generated
 
-# Remove intermediates but keep the final PDF
-tidy:
-	-$(LATEXMK) -c
-	-rm -f $(EXTRA_CLEAN)
-
-# Like tidy, but a bit more aggressive (keeps PDF)
-clean: tidy
-
-# Nuke everything including the PDF
-distclean: clean
-	-rm -f $(PDF)
-
-# Recompile on file changes (handy while editing)
-watch:
-	$(LATEXMK) -pvc $(LMK_OPTS) $(MAIN).tex
-
-# Open the PDF (macOS). Comment this out on Linux/Windows or replace with xdg-open/start
-open: $(PDF)
-	open $(PDF)
-
+open: s2
+	open sessions/s2-2026-11/main.pdf
