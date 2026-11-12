@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Generate LaTeX pieces for a session report from data/*.csv.
+"""Generate LaTeX pieces for a session progress report from data/*.csv.
 
 Usage: python3 scripts/build.py s2
 
-Writes into sessions/<dir>/generated/:
-  weight_table.tex  - longtable rows for this session
-  trend.dat         - all readings (days since first reading, weight, session) for pgfplots
-  daily.tex         - itemize entries from data/daily.csv within the session dates
-  stats.tex         - \newcommand macros (start/latest/min weight, change, to-target)
+Writes into sessions/<id>-*/generated/:
+  weight_table.tex  - longtable of this session's readings
+  trend.dat         - this session's readings (day, weight, body fat) for pgfplots
+  stats.tex         - \\newcommand macros for the summary block
 """
 import csv
 import sys
@@ -23,93 +22,74 @@ def load(name):
         return list(csv.DictReader(f))
 
 
-def d(s):
-    return date.fromisoformat(s) if s else None
-
-
-def tex_escape(s):
-    for a, b in [("\\", r"\textbackslash{}"), ("&", r"\&"), ("%", r"\%"), ("$", r"\$"),
-                 ("#", r"\#"), ("_", r"\_"), ("{", r"\{"), ("}", r"\}")]:
-        s = s.replace(a, b)
-    return s
+def fmt(x):
+    return f"{x:.1f}".rstrip("0").rstrip(".")
 
 
 def main():
     sid = sys.argv[1] if len(sys.argv) > 1 else "s2"
-    sessions = {r["id"]: r for r in load("sessions.csv")}
-    sess = sessions[sid]
-    start, end = d(sess["start"]), d(sess["end"])
+    sess = {r["id"]: r for r in load("sessions.csv")}[sid]
+    start = date.fromisoformat(sess["start"])
     target = float(sess["target_lb"])
 
     sdir = next(p for p in (ROOT / "sessions").iterdir() if p.name.startswith(sid + "-"))
     out = sdir / "generated"
     out.mkdir(exist_ok=True)
 
-    weights = load("weight.csv")
-    in_sess = [r for r in weights if r["session"] == sid]
+    rows = [r for r in load("weight.csv") if r["session"] == sid]
+    w0 = float(rows[0]["weight_lb"]) if rows else None
 
-    # Weight table rows
-    lines = []
-    for r in in_sess:
-        w = float(r["weight_lb"])
-        lines.append(f"{d(r['date']).strftime('%Y-%m-%d')} & {r['time']} & {w:g} & {w - target:+g} \\\\")
-    head = ("\\begin{longtable}{|c|c|c|c|}\n\\hline\n"
-            "Date & Time & Weight (lb) & vs.\\ target (lb) \\\\\n\\hline\\endhead\n\\hline\\endfoot\n")
-    table = head + "\n".join(lines) + "\n\\end{longtable}\n" if lines else "\\textit{No readings yet.}\n"
+    # Weight log table
+    if rows:
+        lines = [
+            r"\begin{longtable}{|c|c|r|r|r|r|}",
+            r"\hline",
+            r"\textbf{Date} & \textbf{Time} & \textbf{Weight (lb)} & \textbf{Body fat (\%)} "
+            r"& \textbf{Change (lb)} & \textbf{To target (lb)} \\",
+            r"\hline\endhead",
+            r"\hline\endfoot",
+        ]
+        for r in rows:
+            w = float(r["weight_lb"])
+            bf = r["body_fat_pct"] or "--"
+            lines.append(f"{r['date']} & {r['time'] or '--'} & {fmt(w)} & {bf} & "
+                         f"{w - w0:+.1f} & {fmt(w - target)} \\\\")
+        lines.append(r"\end{longtable}")
+        table = "\n".join(lines) + "\n"
+    else:
+        table = "\\textit{No readings yet.}\n"
     (out / "weight_table.tex").write_text(table)
 
-    # Trend data: every reading, all sessions
-    first = d(weights[0]["date"])
+    # Trend data: this session only
     with open(out / "trend.dat", "w") as f:
-        f.write("day weight session\n")
-        for r in weights:
-            f.write(f"{(d(r['date']) - first).days} {float(r['weight_lb']):g} {r['session']}\n")
+        f.write("day weight bodyfat\n")
+        for r in rows:
+            day = (date.fromisoformat(r["date"]) - start).days
+            f.write(f"{day} {float(r['weight_lb']):g} {r['body_fat_pct'] or 'nan'}\n")
 
-    # Daily log
-    items = []
-    for r in load("daily.csv"):
-        dt = d(r["date"])
-        if dt < start or (end and dt > end):
-            continue
-        parts = []
-        if r["sleep_h"]:
-            parts.append(f"Sleep {r['sleep_h']} h")
-        if r["energy_10"]:
-            parts.append(f"Energy {r['energy_10']}/10")
-        if r["kcal"]:
-            parts.append(f"{r['kcal']} kcal")
-        if r["protein_g"]:
-            parts.append(f"{r['protein_g']} g protein")
-        if r["cardio"]:
-            parts.append("Cardio: " + r["cardio"])
-        if r["strength"]:
-            parts.append("Strength: " + r["strength"])
-        if r["note"]:
-            parts.append(r["note"])
-        items.append(f"\\item[{dt.strftime('%b %d')}] " + tex_escape("; ".join(parts)))
-    body = "\\begin{itemize}\n" + "\n".join(reversed(items)) + "\n\\end{itemize}\n" if items \
-        else "\\textit{No daily entries yet.}\n"
-    (out / "daily.tex").write_text(body)
-
-    # Stats macros
-    if in_sess:
-        ws = [float(r["weight_lb"]) for r in in_sess]
-        s0, s1, mn = ws[0], ws[-1], min(ws)
+    # Summary macros
+    if rows:
+        ws = [float(r["weight_lb"]) for r in rows]
+        latest = ws[-1]
+        days = (date.fromisoformat(rows[-1]["date"]) - start).days
+        rate = (latest - w0) / days * 7 if days >= 7 else None
+        bfs = [r["body_fat_pct"] for r in rows if r["body_fat_pct"]]
         stats = {
-            "StartWeight": f"{s0:g}", "LatestWeight": f"{s1:g}", "MinWeight": f"{mn:g}",
-            "Change": f"{s1 - s0:+g}", "ToTarget": f"{s1 - target:g}", "NReadings": str(len(ws)),
-            "LatestDate": in_sess[-1]["date"],
+            "StartWeight": fmt(w0), "LatestWeight": fmt(latest), "LatestDate": rows[-1]["date"],
+            "Change": f"{latest - w0:+.1f}", "ChangePct": f"{(latest - w0) / w0 * 100:+.1f}",
+            "ToTarget": fmt(latest - target), "WeeklyRate": f"{rate:+.1f}" if rate is not None else "--",
+            "StartBF": bfs[0] if bfs else "--", "LatestBF": bfs[-1] if bfs else "--",
+            "Days": str(days), "NReadings": str(len(ws)), "XMax": str(max(days, 7)),
         }
     else:
-        stats = {k: "--" for k in ["StartWeight", "LatestWeight", "MinWeight", "Change",
-                                   "ToTarget", "LatestDate"]}
-        stats["NReadings"] = "0"
-    stats["Target"] = f"{target:g}"
-    stats["SessionStart"] = sess["start"]
+        stats = {k: "--" for k in ["StartWeight", "LatestWeight", "LatestDate", "Change", "ChangePct",
+                                   "ToTarget", "WeeklyRate", "StartBF", "LatestBF", "Days"]}
+        stats.update(NReadings="0", XMax="7")
+    stats.update(Target=fmt(target), SessionStart=sess["start"])
     (out / "stats.tex").write_text(
         "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in stats.items()))
 
-    print(f"{sid}: {len(in_sess)} readings, {len(items)} daily entries -> {out.relative_to(ROOT)}")
+    print(f"{sid}: {len(rows)} readings -> {out.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

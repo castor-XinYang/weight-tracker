@@ -2,55 +2,46 @@
 \input{../../shared/preamble}
 \input{generated/stats}
 
-\title{Body Weight Track --- Session 2}
+\title{Weight Progress Report --- Session 2}
 \author{Xin Yang}
-\date{Started \SessionStart{} \quad (updated \today)}
+\date{Program start \SessionStart{} \quad$\cdot$\quad Updated \today}
 
 \begin{document}
 \maketitle
 
-\noindent\textit{There is only one heroism in the world: to see the world as it is and to love it.} \\
---- Romain Rolland (1866 -- 1944)
-
-\section{Status}
-\begin{tabular}{ll}
-Start weight & \StartWeight{} lb \\
-Latest weight & \LatestWeight{} lb (\LatestDate) \\
-Change this session & \Change{} lb \\
-Lowest this session & \MinWeight{} lb \\
-Target & \Target{} lb \quad (\ToTarget{} lb to go) \\
-Readings & \NReadings \\
+\section*{Summary}
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{|l|r||l|r|}
+\hline
+Start weight & \StartWeight{} lb & Target weight & \Target{} lb \\
+Current weight & \LatestWeight{} lb & To target & \ToTarget{} lb \\
+Total change & \Change{} lb (\ChangePct\%) & Avg.\ weekly change & \WeeklyRate{} lb/wk \\
+Body fat (start $\to$ now) & \StartBF{} $\to$ \LatestBF{} \% & Days in program & \Days \\
+\hline
 \end{tabular}
 
-\section{Trend (all sessions)}
+\smallskip
+{\small Last reading: \LatestDate{} \quad$\cdot$\quad Readings: \NReadings}
+\end{center}
+
+\section*{Trend}
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
 \begin{axis}[width=\textwidth,height=7cm,
-  xlabel={Days since 2025-07-11}, ylabel={Weight (lb)},
-  grid=major, legend style={at={(0.5,-0.22)},anchor=north,legend columns=3}, legend cell align=left,
-  scatter/classes={s1={mark=*,blue,mark size=1.2pt},gap={mark=o,gray,mark size=1.5pt},s2={mark=*,red,mark size=1.6pt}}]
-\addplot[scatter,only marks,scatter src=explicit symbolic]
-  table[x=day,y=weight,meta=session]{generated/trend.dat};
-\legend{Session 1, Between sessions, Session 2}
-\addplot[dashed,black,domain=0:500] {\Target};
+  xlabel={Days since program start}, ylabel={Weight (lb)},
+  xmin=0, xmax=\XMax, xtick distance=7, grid=major,
+  legend style={at={(0.5,-0.22)},anchor=north,legend columns=2}]
+\addplot[mark=*,mark size=1.5pt,blue] table[x=day,y=weight]{generated/trend.dat};
+\addlegendentry{Weight}
+\addplot[dashed,red,domain=0:\XMax] {\Target};
+\addlegendentry{Target (\Target{} lb)}
 \end{axis}
 \end{tikzpicture}
 \end{figure}
 
-\section{Plan}
-\input{plan}
-
-\section{Weight log}
+\section*{Weight log}
 \input{generated/weight_table}
-
-\section{Daily log}
-\input{generated/daily}
-
-\section{Monthly summary}
-\input{summary}
-
-\section{Looking back at Session 1}
-\input{retro-s1}
 
 \end{document}

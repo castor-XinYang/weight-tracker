@@ -1,3 +1,3 @@
 id,start,end,start_lb,target_lb,goal
-s1,2025-07-11,2025-10-31,260,175,"Extreme diet (to 2025-10-19), then re-feed"
-s2,2026-11-12,,,175,"Restart; phase goal TBD"
+s1,2025-07-11,2025-10-31,260,175,"Session 1"
+s2,2026-11-12,,,200,"Session 2"
